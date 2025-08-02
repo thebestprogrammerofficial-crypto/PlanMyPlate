@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HealthyMe - Diet Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* GENERAL STYLES */
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+h2, h3 { margin-top: 0; }
+
+/* SCREEN TRANSITIONS */
+.screen {
+    display: none;
+    padding: 20px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.screen.active {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* INPUTS */
+input, select, textarea {
+    width: 100%; padding: 10px; margin: 6px 0;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 16px;
+}
+textarea { min-height: 80px; resize: vertical; }
+
+/* BUTTONS */
+button {
+    padding: 12px; border: none; background: #28a745;
+    color: white; border-radius: 6px; font-size: 16px;
+    cursor: pointer; width: 100%;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+button:hover { background: #218838; transform: scale(1.03); }
+
+/* CALENDAR */
+.calendar {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+}
+.day {
+    background: white; padding: 15px; text-align: center;
+    border-radius: 6px; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+.day:hover { background: #e2f0d9; transform: scale(1.05); }
+
+/* MEAL SECTIONS */
+.meal-section {
+    background: white; margin-top: 10px; padding: 10px;
+    border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    animation: fadeIn 0.4s ease;
+}
+.meal-title { font-weight: bold; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+
+<!-- SCREEN 1: PROFILE -->
+<div id="screen1" class="screen active">
+    <h2>Create Your Profile</h2>
+    <input type="number" id="age" placeholder="Age">
+    <input type="number" id="weight" placeholder="Weight (kg)">
+    <input type="number" id="height" placeholder="Height (cm)">
+    <select id="gender">
+        <option value="">Gender</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+    </select>
+    <select id="activity">
+        <option value="">Activity Level</option>
+        <option value="1.2">Sedentary</option>
+        <option value="1.375">Lightly Active</option>
+        <option value="1.55">Moderately Active</option>
+        <option value="1.725">Very Active</option>
+    </select>
+    <select id="goal">
+        <option value="">Goal</option>
+        <option value="lose">Lose Weight</option>
+        <option value="maintain">Maintain</option>
+        <option value="gain">Gain Muscle</option>
+    </select>
+    <button onclick="saveProfile()">Continue</button>
+</div>
+
+<!-- SCREEN 2: CALENDAR -->
+<div id="screen2" class="screen">
+    <h2>Select a Date</h2>
+    <div class="calendar" id="calendar"></div>
+</div>
+
+<!-- SCREEN 3: DAILY MEALS -->
+<div id="screen3" class="screen">
+    <h2 id="selectedDate"></h2>
+    <div id="mealList"></div>
+    <button onclick="showAddMeal()">Add Meal</button>
+</div>
+
+<!-- SCREEN 4: ADD MEAL -->
+<div id="screen4" class="screen">
+    <h2>Add Meal</h2>
+    <select id="mealType">
+        <option value="breakfast">Breakfast</option>
+        <option value="lunch">Lunch</option>
+        <option value="dinner">Dinner</option>
+    </select>
+    <input type="text" id="mealName" placeholder="Meal name">
+    <button onclick="checkNutrition()">Check Nutrition</button>
+
+    <h3>Ingredients</h3>
+    <textarea id="ingredients" placeholder="Auto-filled ingredients will appear here..."></textarea>
+
+    <h3>Nutrition Facts</h3>
+    <textarea id="nutritionFacts" placeholder="Protein, Calories, Carbs, Fats..."></textarea>
+
+    <button onclick="saveMeal()">Save Meal</button>
+</div>
+
+<script>
+let meals = JSON.parse(localStorage.getItem("meals") || "{}");
+let currentDate = "";
+
+// SCREEN SWITCHER
+function switchScreen(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    setTimeout(() => {
+        document.getElementById(id).classList.add("active");
+    }, 50);
+}
+
+// SAVE PROFILE
+function saveProfile() {
+    const profile = {
+        age: document.getElementById("age").value,
+        weight: document.getElementById("weight").value,
+        height: document.getElementById("height").value,
+        gender: document.getElementById("gender").value,
+        activity: document.getElementById("activity").value,
+        goal: document.getElementById("goal").value
+    };
+    if (!profile.age || !profile.weight || !profile.height || !profile.gender || !profile.activity || !profile.goal) {
+        alert("Please fill all fields.");
+        return;
+    }
+    localStorage.setItem("profile", JSON.stringify(profile));
+    console.log("[CLL] Profile saved:", profile);
+    generateCalendar();
+    switchScreen("screen2");
+}
+
+// GENERATE CALENDAR
+function generateCalendar() {
+    const cal = document.getElementById("calendar");
+    cal.innerHTML = "";
+    const daysInMonth = 30;
+    for (let i = 1; i <= daysInMonth; i++) {
+        let day = document.createElement("div");
+        day.className = "day";
+        day.innerText = i;
+        day.onclick = () => openDay(`2025-08-${String(i).padStart(2,"0")}`);
+        cal.appendChild(day);
+    }
+}
+
+// OPEN DAY
+function openDay(date) {
+    currentDate = date;
+    document.getElementById("selectedDate").innerText = `Meals for ${date}`;
+    displayMeals();
+    switchScreen("screen3");
+}
+
+// DISPLAY MEALS
+function displayMeals() {
+    const container = document.getElementById("mealList");
+    container.innerHTML = "";
+    const dayMeals = meals[currentDate] || {};
+    ["breakfast","lunch","dinner"].forEach(type => {
+        const meal = dayMeals[type];
+        let div = document.createElement("div");
+        div.className = "meal-section";
+        div.innerHTML = `<div class="meal-title">${type.toUpperCase()}</div>` +
+                        (meal 
+                          ? `${meal.name}<br><small>${meal.ingredients.replace(/\n/g, ", ")}</small>` 
+                          : "<em>No meal added</em>");
+        container.appendChild(div);
+    });
+}
+
+// SHOW ADD MEAL
+function showAddMeal() {
+    switchScreen("screen4");
+}
+
+// CHECK NUTRITION
+async function checkNutrition() {
+    const meal = document.getElementById("mealName").value;
+    if (!meal) { 
+        alert("Enter a meal name first."); 
+        return; 
+    }
+
+    document.getElementById("ingredients").value = "Loading...";
+    document.getElementById("nutritionFacts").value = "Loading...";
+
+    console.log(`[CLL] Requesting nutrition data for: ${meal}`);
+
+    try {
+        const apiKey = "AIzaSyDktrc4GOsqm-Oypo2pDrSrCbRd7zRfiqY"; 
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `Return ONLY valid JSON for the meal "${meal}" in this format:
+{
+  "ingredients": ["list of ingredients"],
+  "nutrition": {
+    "protein": "X g",
+    "calories": "X kcal",
+    "carbs": "X g",
+    "fats": "X g"
+  }
+}
+No extra words, no markdown, no explanations.`
+                    }]
+                }]
+            })
+        });
+
+        const data = await res.json();
+        let text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+        // Extract JSON from messy response
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found");
+
+        const parsed = JSON.parse(jsonMatch[0]);
+
+        // Fill UI
+        document.getElementById("ingredients").value = parsed.ingredients.join("\n");
+        document.getElementById("nutritionFacts").value = 
+            `Protein: ${parsed.nutrition.protein}
+Calories: ${parsed.nutrition.calories}
+Carbs: ${parsed.nutrition.carbs}
+Fats: ${parsed.nutrition.fats}`;
+
+        console.log("[CLL] Nutrition data received:", parsed);
+
+    } catch (e) {
+        console.error("[CLL] Error fetching nutrition:", e);
+        document.getElementById("ingredients").value = "Error fetching data.";
+        document.getElementById("nutritionFacts").value = "";
+    }
+}
+
+// SAVE MEAL
+function saveMeal() {
+    const type = document.getElementById("mealType").value;
+    const name = document.getElementById("mealName").value;
+    const ing = document.getElementById("ingredients").value;
+    const nut = document.getElementById("nutritionFacts").value;
+    if (!meals[currentDate]) meals[currentDate] = {};
+    meals[currentDate][type] = { name, ingredients: ing, nutrition: nut };
+    localStorage.setItem("meals", JSON.stringify(meals));
+    console.log(`[CLL] Saved ${type} for ${currentDate}:`, meals[currentDate][type]);
+    openDay(currentDate);
+}
+</script>
+</body>
+</html>
